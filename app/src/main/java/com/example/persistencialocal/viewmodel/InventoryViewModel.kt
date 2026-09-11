@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,8 +23,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val repository: InventoryRepository
     
-    // Lista de productos observada desde Room
-    val allProducts: StateFlow<List<ProductEntity>>
+    // Consulta de búsqueda actual
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    // Lista filtrada que combina los productos y la búsqueda
+    val filteredProducts: StateFlow<List<ProductEntity>>
     
     // Umbral de stock bajo observado desde DataStore
     val lowStockThreshold: StateFlow<Int>
@@ -37,17 +42,31 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         val settingsManager = SettingsManager(application)
         repository = InventoryRepository(database.productDao(), settingsManager)
         
-        allProducts = repository.allProducts.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-        
         lowStockThreshold = repository.lowStockThreshold.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 5
         )
+
+        // Combinamos la lista de la DB con el query de búsqueda de forma reactiva
+        filteredProducts = combine(repository.allProducts, _searchQuery) { products, query ->
+            if (query.isBlank()) {
+                products
+            } else {
+                products.filter { 
+                    it.name.contains(query, ignoreCase = true) || 
+                    it.category.contains(query, ignoreCase = true)
+                }
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    }
+
+    fun onSearchQueryChange(newQuery: String) {
+        _searchQuery.value = newQuery
     }
 
     fun addProduct(name: String, price: Double, stock: Int, category: String) {
@@ -85,6 +104,17 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiMessage.value = "Producto eliminado"
             } catch (e: Exception) {
                 _uiMessage.value = "Error al eliminar"
+            }
+        }
+    }
+
+    fun deleteAllProducts() {
+        viewModelScope.launch {
+            try {
+                repository.deleteAllProducts()
+                _uiMessage.value = "Inventario vaciado"
+            } catch (e: Exception) {
+                _uiMessage.value = "Error al vaciar inventario"
             }
         }
     }

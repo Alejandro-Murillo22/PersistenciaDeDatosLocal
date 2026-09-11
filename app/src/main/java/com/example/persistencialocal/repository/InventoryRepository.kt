@@ -30,6 +30,10 @@ class InventoryRepository(
         productDao.deleteProduct(product)
     }
 
+    suspend fun deleteAllProducts() {
+        productDao.deleteAllProducts()
+    }
+
     suspend fun updateStock(product: ProductEntity, newStock: Int) {
         if (newStock >= 0) {
             productDao.updateProduct(product.copy(stock = newStock))
