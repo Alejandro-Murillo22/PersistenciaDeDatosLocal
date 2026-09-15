@@ -34,19 +34,38 @@ class InventoryRepository(
         productDao.deleteAllProducts()
     }
 
+    /**
+     * Defensa adicional de la capa de repositorio: un stock negativo es un estado imposible del
+     * dominio y nunca debe llegar a la base de datos.
+     *
+     * El ViewModel ya valida antes de llamar aquí, así que en condiciones normales esta excepción
+     * no se lanza. Se lanza en vez de ignorar el valor para que un error de programación futuro
+     * (un nuevo `caller` que olvide validar) falle de forma visible y no de forma silenciosa: si
+     * se descartara la escritura sin avisar, la UI mostraría un valor que nunca se guardó.
+     *
+     * @throws IllegalArgumentException si [newStock] es negativo.
+     */
     suspend fun updateStock(product: ProductEntity, newStock: Int) {
-        if (newStock >= 0) {
-            productDao.updateProduct(product.copy(stock = newStock))
+        require(newStock >= 0) {
+            "El stock no puede ser negativo (se recibió $newStock para '${product.name}')"
         }
+        productDao.updateProduct(product.copy(stock = newStock))
     }
 
     // --- Operaciones de DataStore (Preferencias) ---
 
     val lowStockThreshold: Flow<Int> = settingsManager.lowStockThreshold
 
+    /**
+     * Mismo criterio que [updateStock]: un umbral negativo no tiene sentido, y descartarlo en
+     * silencio dejaría al usuario creyendo que su ajuste se guardó.
+     *
+     * @throws IllegalArgumentException si [threshold] es negativo.
+     */
     suspend fun saveLowStockThreshold(threshold: Int) {
-        if (threshold >= 0) {
-            settingsManager.saveLowStockThreshold(threshold)
+        require(threshold >= 0) {
+            "El umbral de stock bajo no puede ser negativo (se recibió $threshold)"
         }
+        settingsManager.saveLowStockThreshold(threshold)
     }
 }

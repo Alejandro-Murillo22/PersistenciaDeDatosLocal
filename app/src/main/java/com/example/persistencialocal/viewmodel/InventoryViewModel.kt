@@ -119,16 +119,44 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Aumenta en 1 el stock del producto.
+     *
+     * Simetría con [decreaseStock]: el límite inferior (0) es una regla del DOMINIO —no existe
+     * stock negativo—, mientras que el límite superior es una regla ARBITRARIA de negocio. Aun
+     * así se aplica [MAX_STOCK] para que el campo no crezca sin control: `stock` es un `Int` y
+     * un `+1` repetido sin tope terminaría desbordando a negativo (Int.MAX_VALUE + 1), lo que
+     * dejaría la base de datos en un estado imposible. El tope elegido es holgado para un
+     * inventario de campo y se valida en el mismo punto que el límite inferior, con el mismo
+     * tipo de mensaje al usuario.
+     *
+     * La comprobación de aquí es la que decide si la operación procede. El `require` del
+     * repositorio es una defensa adicional de la capa de datos, no un reemplazo: el `try/catch`
+     * solo existe para que un fallo inesperado (incluido un error de Room al escribir) llegue al
+     * usuario como mensaje en vez de tumbar la corrutina en silencio.
+     */
     fun increaseStock(product: ProductEntity) {
-        viewModelScope.launch {
-            repository.updateStock(product, product.stock + 1)
+        if (product.stock < MAX_STOCK) {
+            viewModelScope.launch {
+                try {
+                    repository.updateStock(product, product.stock + 1)
+                } catch (e: Exception) {
+                    _uiMessage.value = "Error al aumentar el stock"
+                }
+            }
+        } else {
+            _uiMessage.value = "El stock no puede superar $MAX_STOCK unidades"
         }
     }
 
     fun decreaseStock(product: ProductEntity) {
         if (product.stock > 0) {
             viewModelScope.launch {
-                repository.updateStock(product, product.stock - 1)
+                try {
+                    repository.updateStock(product, product.stock - 1)
+                } catch (e: Exception) {
+                    _uiMessage.value = "Error al disminuir el stock"
+                }
             }
         } else {
             _uiMessage.value = "El stock no puede ser menor a 0"
@@ -137,7 +165,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateThreshold(newThreshold: Int) {
         viewModelScope.launch {
-            repository.saveLowStockThreshold(newThreshold)
+            try {
+                repository.saveLowStockThreshold(newThreshold)
+            } catch (e: Exception) {
+                _uiMessage.value = "Error al guardar el umbral"
+            }
         }
     }
 
@@ -160,5 +192,10 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearMessage() {
         _uiMessage.value = null
+    }
+
+    companion object {
+        /** Tope superior de stock por producto. Ver [increaseStock]. */
+        const val MAX_STOCK = 9_999
     }
 }
