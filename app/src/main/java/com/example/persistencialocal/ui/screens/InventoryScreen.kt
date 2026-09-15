@@ -317,7 +317,7 @@ fun EducationSection(onLoadSampleData: () -> Unit) {
             OutlinedButton(
                 onClick = onLoadSampleData,
                 modifier = Modifier.align(Alignment.End),
-                border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.onTertiaryContainer))
+                border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.onTertiaryContainer))
             ) {
                 Text("Cargar Muestras", color = MaterialTheme.colorScheme.onTertiaryContainer)
             }
